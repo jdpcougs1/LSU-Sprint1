@@ -19,10 +19,18 @@ namespace LSU_App
         {
             InitializeComponent();
 
-            // These are the seed  for the demo account users
-            _auth.AddUser("alice", "pass123", Role.Student);
-            _auth.AddUser("bob", "pass123", Role.Faculty);
-            _auth.AddUser("admin", "admin123", Role.Admin);
+            // Create DB, apply migrations, seed users, courses, and completion
+            DbInitializer.EnsureMigratedAndSeeded();
+
+            // Wire events for constructor
+            btnLogin.Click += btnLogin_Click;
+            btnRegister.Click += btnRegister_Click;
+
+            // Search box and refresh button go here
+            // btnRefreshCourses.Click += (_, __) => RefreshCourses();
+            // txtSearch.TextChanged += (_, __) => RefreshCourses();
+
+            RefreshCourses(); // optional initial list
         }
 
         private void Form1_Load(object? sender, EventArgs e)
@@ -45,19 +53,52 @@ namespace LSU_App
         {
             var u = txtUser.Text.Trim();
             var p = txtPass.Text;
-            _session = _auth.Login(u, p);
 
+            var s = _auth.Login(u, p);
             if (_session is null)
             {
-                MessageBox.Show("Invalid credentials.", "Login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Invalid credentials", "Login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            lblLoggedInAs.Text = $"Logged in as: {_session.Username} ({_session.Role})";
-            SwitchRoleUI(_session.Role);
-            RefreshLists();
+            _session = s;
+            lblLoggedInAs.Text = $"Logged in as: {s.Username} ({s.Role})";
+
+            RefreshCourses();
         }
 
+        //Modified 05OCT25 Karima
+        private void btnRegister_Click(object? sender, EventArgs e)
+        {
+            if (_session is null || _session.Role != RoleName.Student)
+            {
+                MessageBox.Show("Student login required.", "Register",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+            }
+            if (lstCourses.SelectedItem is not Course c)
+            {
+                MessageBox.Show("Select a course first.", "Register",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var (ok, msg) = _registration.Register(_session.UserId, c.Code);
+            MessageBox.Show(msg, ok ? "Registered" : "Registration Failed");
+            if (ok) RefreshCourses();
+        }
+
+        private void RefreshCourses()
+        {
+            lstCourses.Items.Clear();
+
+            // If you have a search box:
+            // var items = _courses.Search(txtSearch.Text);
+        var items = _courses.List();
+
+        foreach (var c in items)
+            lstCourses.Items.Add(c); // Course.ToString() shows code/title/seats
+        }
         private void SwitchRoleUI(Role role)
         {
             grpStudent.Visible = (role == Role.Student);
